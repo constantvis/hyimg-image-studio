@@ -10,6 +10,7 @@
 // pictures load by relative links.
 import { register as registerImageFrame } from "./imgframe.js";   // the image frame with its editor (owner 2026-10-05), its own module
 import { translator } from "./lang.js";   // English or Russian, as the board is set (owner 2026-10-06)
+import { register as registerModels } from "./models.js";   // Settings › Image Studio: the models, their size, Remove (2026-10-10)
 
 const TYPE = "htmlframe";
 const PRESETS = [["Phone", 390, 844], ["Tablet", 834, 1194], ["Laptop", 1280, 800], ["Desktop", 1440, 900]];   // names through t()
@@ -183,4 +184,5 @@ export function register(hy) {
   // no dock button to make a new frame (owner 2026-10-09: «Также создавать фрейм я не вижу смысла. Зачем вообще эта кнопка?»): agents
   // place frames with hy.py do 'htmlframe …', the frames already on a board work as before
   registerImageFrame(hy);
+  registerModels(hy, t);
 }

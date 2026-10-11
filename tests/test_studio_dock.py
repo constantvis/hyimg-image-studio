@@ -99,13 +99,13 @@ def test_studio_dock(hy):
         # press and drag up 6 px: the list at once, without the wait
         x, y = mid(page, "#dock button.ifg[data-g=gmarq]")
         page.mouse.move(x, y); page.mouse.down(); page.mouse.move(x, y - 10, steps=2); page.wait_for_timeout(60)
-        assert page.evaluate(FLY) == ["marquee", "ellipse", "lasso", "wand"]
+        assert page.evaluate(FLY) == ["marquee", "ellipse", "lasso", "wand", "smart"]
         page.mouse.move(*mid(page, ".ifly button[data-t=lasso]"), steps=4); page.mouse.up(); page.wait_for_timeout(150)
         assert fr.evaluate(TOOL) == "lasso" and page.evaluate(ON) == ["gmarq", "lasso"]
 
         # let go on the button: the list stays, the tool in hand lit; a click on a tool takes it
         page.mouse.move(x, y); page.mouse.down(); page.wait_for_timeout(350); page.mouse.up(); page.wait_for_timeout(150)
-        assert page.evaluate(FLY) == ["marquee", "ellipse", "lasso*", "wand"]
+        assert page.evaluate(FLY) == ["marquee", "ellipse", "lasso*", "wand", "smart"]
         page.mouse.click(*mid(page, ".ifly button[data-t=wand]")); page.wait_for_timeout(150)
         assert fr.evaluate(TOOL) == "wand" and page.evaluate(FLY) is None
 
@@ -208,29 +208,29 @@ def test_studio_dock_release_in_the_app(hy):
             return lit
 
         # the hold, then the glide onto Lasso: raw events, a mouse and a trackpad pressing deeper
-        assert gesture("gmarq", "lasso") == ["marquee", "ellipse", "lasso*", "wand"]
+        assert gesture("gmarq", "lasso") == ["marquee", "ellipse", "lasso*", "wand", "smart"]
         assert fr.evaluate(TOOL) == "lasso" and page.evaluate(ON) == ["gmarq", "lasso"] and page.evaluate(FLY) is None
         assert gesture("gsel", "move", force=0.5) == ["select", "move*"]
         assert fr.evaluate(TOOL) == "move" and page.evaluate(FLY) is None
 
         # the press on the corner mark (its 14 px target is a quarter of the button): the list at once, the glide lights the row, letting go takes it
         mx, my = mid(page, "#dock button.ifg[data-g=gmarq] .fm")
-        assert gesture("gmarq", "wand", start=(mx - 3, my - 3), hold=0.05) == ["marquee", "ellipse", "lasso", "wand*"]
+        assert gesture("gmarq", "wand", start=(mx - 3, my - 3), hold=0.05) == ["marquee", "ellipse", "lasso", "wand*", "smart"]
         assert fr.evaluate(TOOL) == "wand" and page.evaluate(ON) == ["gmarq", "wand"] and page.evaluate(FLY) is None
 
         # the button does not keep the pointer: the moves go to the list's rows, the release to the row or to the studio's page
         page.evaluate("() => { Element.prototype.__spc = Element.prototype.setPointerCapture; Element.prototype.setPointerCapture = function () {}; }")
-        assert gesture("gmarq", "ellipse") == ["marquee", "ellipse*", "lasso", "wand"]
+        assert gesture("gmarq", "ellipse") == ["marquee", "ellipse*", "lasso", "wand", "smart"]
         assert fr.evaluate(TOOL) == "ellipse" and page.evaluate(ON) == ["gmarq", "ellipse"] and page.evaluate(FLY) is None
         # let go in the gap between the list and the dock, over the studio's page: nothing changes, the list goes
         x, y = mid(page, "#dock button.ifg[data-g=gmarq]")
         lit = gesture("gmarq", "lasso", release=(x, page.evaluate("() => document.getElementById('dock').getBoundingClientRect().top") - 4))
-        assert lit == ["marquee", "ellipse", "lasso*", "wand"]
+        assert lit == ["marquee", "ellipse", "lasso*", "wand", "smart"]
         assert page.evaluate("() => document.elementFromPoint(%f, document.getElementById('dock').getBoundingClientRect().top - 4).tagName" % x) == "IFRAME"
         assert fr.evaluate(TOOL) == "ellipse" and page.evaluate(FLY) is None
         # a hold and a release on the button: the list stays, to be clicked
         gesture("gmarq", (x, y), release=(x, y))
-        assert page.evaluate(FLY) == ["marquee", "ellipse*", "lasso", "wand"]
+        assert page.evaluate(FLY) == ["marquee", "ellipse*", "lasso", "wand", "smart"]
         page.mouse.click(*mid(page, ".ifly button[data-t=marquee]")); page.wait_for_timeout(150)
         assert fr.evaluate(TOOL) == "marquee" and page.evaluate(FLY) is None
         page.evaluate("() => { Element.prototype.setPointerCapture = Element.prototype.__spc; }")

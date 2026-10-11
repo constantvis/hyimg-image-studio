@@ -15,7 +15,7 @@
   // Select Subject among the tools: the studio has none as a tool (Select Subject and the fill are commands, on the bar and in Actions)
   const GROUPS = [
     { id: 'gsel', name: () => W.selMove, tools: ['select', 'move'] },
-    { id: 'gmarq', name: () => T.selectionTools, tools: ['marquee', 'ellipse', 'lasso', 'wand'] },
+    { id: 'gmarq', name: () => T.selectionTools, tools: ['marquee', 'ellipse', 'lasso', 'wand', 'smart'] },   // smart: segwork.js, when loaded
     { id: 'gbrush', name: () => T.tool.brush, tools: ['brush'] },
     { id: 'gheal', name: () => T.healingTools, tools: ['patch'] },
     { id: 'gpick', name: () => T.tool.pick, tools: ['pick'] },
@@ -28,7 +28,8 @@
   };
   let link = null;
   K.dock = {
-    groups: () => GROUPS.map(g => ({ id: g.id, name: g.name(), tools: g.tools.map(id => ({ id, name: (T.tool && T.tool[id]) || id, keys: keysOf(id) })) })),
+    groups: () => GROUPS.map(g => ({ id: g.id, name: g.name(), tools: g.tools.filter(id => (K.TOOLS || []).some(t => t.id === id))
+      .map(id => ({ id, name: (T.tool && T.tool[id]) || id, keys: keysOf(id) })) })),
     tool: () => S.tool,
     setTool: id => { if (S.tool !== id) K.setTool(id); },
     colors: () => ({ fg: S.fg, bg: S.bg }),

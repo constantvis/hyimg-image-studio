@@ -174,5 +174,5 @@ def test_a_helper_that_cannot_be_imported_is_not_remembered(routes, monkeypatch,
     assert "helper" not in routes._MODS
 
 
-def test_the_routes_table_names_the_four_routes(routes):
-    assert set(routes.ROUTES) == {"inpaint", "subject", "versions", "prune"}
+def test_the_routes_table_names_the_routes(routes):   # with SAM 3 and BiRefNet's since 2026-10-10 (test_seg_routes.py)
+    assert set(routes.ROUTES) == {"inpaint", "subject", "versions", "prune", "segment", "matte", "segwarm", "models", "models_remove"}

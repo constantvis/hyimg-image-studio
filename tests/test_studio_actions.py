@@ -54,8 +54,11 @@ def test_html_frame_live_view_actions_top_right(hy):
         page.wait_for_selector(".plg[data-id=h1]"); page.dblclick(".plg[data-id=h1]"); page.wait_for_selector(".hfbar")
         assert page.evaluate("() => [...document.querySelectorAll('hy-studio-actions > *')].map(b => b.dataset.a)") == ["reload", "open", "done"]
         assert page.evaluate("() => document.querySelectorAll('.hfbar [data-a]').length") == 0
-        acts, bell = page.evaluate(BOX, "hy-studio-actions"), page.evaluate(BOX, "#bntf")
-        assert acts[1] == 12 and acts[2] == bell[0] - 8, (acts, bell)
+        # the right end of the row is the live view's, as a Studio's (Hyimg ui/modes.js data-in-studio, owner 2026-10-11): the board's round
+        # buttons and its Info card are away, the actions stand at the window's edge
+        acts, width = page.evaluate(BOX, "hy-studio-actions"), page.evaluate("() => innerWidth")
+        assert acts[1] == 12 and acts[2] == width - 12, (acts, width)
+        assert page.evaluate("() => ['#bntf', '#info'].every(q => { const e = document.querySelector(q); return !e || !e.getClientRects().length; })")
         # a press on the actions does not end the live page (a press elsewhere does); Done does
         page.click("hy-studio-actions [data-a=reload]"); page.wait_for_timeout(200)
         assert page.locator(".plg[data-id=h1] iframe.hfl").count() == 1

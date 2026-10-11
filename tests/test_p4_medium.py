@@ -44,7 +44,7 @@ def test_names_steps_and_keys(hy):
         # a frame of two pictures for the rest
         fid, fr = open_frame(page); focus(page, fr)
         # S-48: the frame's name is a step
-        page.dblclick("#cIfr"); page.wait_for_selector("#cIfr input"); page.keyboard.press("Meta+a"); page.keyboard.type("Poster"); page.keyboard.press("Enter")   # the board's crumb
+        page.dblclick("#cStudio"); page.wait_for_selector("#cStudio input"); page.keyboard.press("Meta+a"); page.keyboard.type("Poster"); page.keyboard.press("Enter")   # the board's crumb
         fr.wait_for_timeout(200); assert fr.evaluate("() => document.getElementById('cFrameName').textContent") == "Poster"
         focus(page, fr); page.keyboard.press("Meta+z"); fr.wait_for_timeout(300)
         assert fr.evaluate("() => document.getElementById('cFrameName').textContent") != "Poster", "⌘Z did not take the rename back"

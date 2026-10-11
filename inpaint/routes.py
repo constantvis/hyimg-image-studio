@@ -1,11 +1,19 @@
 """The frames plugin's server routes (owner 2026-10-05: the editor's content-aware fill and subject mask live in Hyimg's own server, not in
 a dev server beside it). Hyimg loads this file by manifest.json "server" and serves each route at POST /api/plugin/<plugin>/<name>:
 
-  POST .../inpaint {"image": "data:image/png;base64,…", "mask": "data:image/png;base64,…"} → {"image": "data:image/png;base64,…", "ms": 2900}
+  POST .../inpaint {"image": "data:image/png;base64,…", "mask": "data:image/png;base64,…"} → {"image": "data:image/png;base64,…", "ms": 2900,
+        "seconds": 2.9, "compute": "local · LaMa ONNX · CPU"}
         LaMa (lama.py) on this Mac; without the model file: 503 {"error", "fallback": "local"}, and the editor fills by itself
   POST .../subject {"image": "data:…"} → {"mask": "data:image/png;base64,…" (white = the subject), "ms": 500}, macOS Vision (subject.py)
   POST .../versions {"dir": "frames/<stamp>"} → {"versions": [0, 1], "next": 2}: the saved versions of a frame
   POST .../prune {"dir": "frames/<stamp>", "keep": 10} → {"kept", "removed"}: older versions go, with the files only they used
+  POST .../segment {"image", "text"?, "points"?: [{x, y, label: 1|-1}], "box"?: {x, y, w, h}} → {"masks": [data URL], "boxes": [[x, y, w, h]],
+        "scores", "how", "ms"}: SAM 3 (seg.py, segworker.py); a word gives every instance, best first; points or a box the one object
+  POST .../matte {"image", "mask"? | "box"?, "method"?: "birefnet"|"guided"} → {"alpha": data URL, "how", "ms"}: BiRefNet lite on a crop
+        around the mask or box (the whole picture without either: Remove Background); a mask's edge snaps to the picture's (edges.py).
+        "guided" (or BiRefNet missing, with a mask) runs here, no model. Missing models: 503 {"error", "missing", "fallback"}
+  POST .../segwarm {"models": ["sam", "bir"]} → loads them before the first click;  POST .../models {} → what Settings › Image Studio shows;
+  POST .../models_remove {"id"} → that model's folder removed
 
 A route is fn(body bytes, query dict) -> (status, content type, bytes). lama.py and subject.py are loaded under names of their own, so
 nothing of this folder goes into the server's sys.path; the LaMa session stays loaded in the server's process after the first fill.
@@ -60,7 +68,100 @@ def inpaint(body, query=None):
     out = lama.fill(np.asarray(img)[..., :3], np.asarray(mask))
     ms = round((time.time() - t) * 1000)
     res = Image.fromarray(out).convert("RGBA"); res.putalpha(img.getchannel("A"))
-    return _json(200, {"image": _png_url(res), "ms": ms})
+    # how long and where, in Hyimg's words for a file's json (owner 2026-10-11): the editor keeps them on the layer it makes (run)
+    return _json(200, {"image": _png_url(res), "ms": ms, "seconds": round(ms / 1000, 3), "compute": "local · LaMa ONNX · CPU"})
+
+
+def _seg_img(d, key="image"):
+    """a data URL to a PNG file for the worker, and its hash (the worker keeps the backbone of the last pictures by it)"""
+    import hashlib
+    import tempfile
+    raw = base64.b64decode(str(d[key]).split(",", 1)[-1])
+    tmp = tempfile.mkdtemp(prefix="hyimg-seg-")
+    path = os.path.join(tmp, f"{key}.png")
+    with open(path, "wb") as f: f.write(raw)
+    return tmp, path, hashlib.sha1(raw).hexdigest()
+
+
+def _file_url(path):
+    with open(path, "rb") as f: return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+
+
+def _xywh(b):
+    if b is None: return None
+    if isinstance(b, dict): return [float(b["x"]), float(b["y"]), float(b["w"]), float(b["h"])]
+    return [float(v) for v in b][:4]
+
+
+def segment(body, query=None):
+    import shutil
+    seg = _mod("seg")
+    try:
+        d = json.loads(body); text = str(d.get("text") or "").strip()
+        pts = [[float(p["x"]), float(p["y"]), 1 if float(p.get("label", 1)) > 0 else 0] if isinstance(p, dict) else [float(p[0]), float(p[1]), 1 if len(p) < 3 or float(p[2]) > 0 else 0]
+               for p in d.get("points") or []]
+        box = _xywh(d.get("box"))
+        if not (text or pts or box): raise ValueError("text, points or box")
+        tmp, path, key = _seg_img(d)
+    except (ValueError, KeyError, TypeError, AttributeError, IndexError) as ex:
+        return _json(400, {"error": f"bad request: {ex}"})
+    try:
+        miss = seg.missing("sam3-4bit")
+        if miss: return _json(503, miss)
+        try: r = seg.call({"op": "segment", "image": path, "out": tmp, "key": key, "text": text, "points": pts, "box": box})
+        except RuntimeError as ex: return _json(500, {"error": str(ex)})
+        return _json(200, {"masks": [_file_url(m) for m in r["masks"]], "boxes": r["boxes"], "scores": r["scores"], "how": r["how"],
+                           "ms": r["ms"], "loadMs": r.get("load_ms"), "model": "sam3-4bit"})
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def matte(body, query=None):
+    import shutil
+    seg = _mod("seg")
+    try:
+        d = json.loads(body); method = d.get("method") or "birefnet"; box = _xywh(d.get("box"))
+        if method not in ("birefnet", "guided"): raise ValueError("method: birefnet or guided")
+        tmp, path, key = _seg_img(d)
+        mpath = _seg_img(d, "mask")[1] if d.get("mask") else None
+    except (ValueError, KeyError, TypeError, AttributeError) as ex:
+        return _json(400, {"error": f"bad request: {ex}"})
+    try:
+        miss = seg.missing("birefnet-lite") if method == "birefnet" else None
+        if miss and not mpath:   # Remove Background without BiRefNet: the studio asks macOS Vision (/subject) instead
+            return _json(503, {**miss, "fallback": "vision"})
+        if method == "guided" or miss:   # the edge without a model: the guided filter here
+            import numpy as np
+            from PIL import Image
+            t = time.time(); img = _img(d["image"], "RGB"); mask = _img(d["mask"], "L").resize(img.size)
+            a = _mod("edges").guided(np.asarray(img), np.asarray(mask))
+            return _json(200, {"alpha": _png_url(Image.fromarray(a)), "how": "guided", "ms": round((time.time() - t) * 1000),
+                               "note": miss and miss["error"]})
+        try: r = seg.call({"op": "matte", "image": path, "out": tmp, "mask": mpath, "box": box})
+        except RuntimeError as ex: return _json(500, {"error": str(ex)})
+        return _json(200, {"alpha": _file_url(r["alpha"]), "how": "birefnet", "ms": r["ms"], "loadMs": r.get("load_ms"), "device": r.get("device")})
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+        if mpath: shutil.rmtree(os.path.dirname(mpath), ignore_errors=True)
+
+
+def segwarm(body, query=None):
+    seg = _mod("seg")
+    try: want = [m for m in (json.loads(body or b"{}").get("models") or ["sam"]) if m in ("sam", "bir")]
+    except (ValueError, AttributeError) as ex: return _json(400, {"error": str(ex)})
+    miss = seg.missing(*[{"sam": "sam3-4bit", "bir": "birefnet-lite"}[m] for m in want])
+    if miss: return _json(503, miss)
+    try: return _json(200, seg.call({"op": "warm", "models": want}))
+    except RuntimeError as ex: return _json(500, {"error": str(ex)})
+
+
+def models(body, query=None):
+    return _json(200, _mod("seg").status())
+
+
+def models_remove(body, query=None):
+    try: return _json(200, _mod("seg").remove(json.loads(body or b"{}").get("id")))
+    except (ValueError, AttributeError, OSError) as ex: return _json(400, {"error": str(ex)})
 
 
 def subject(body, query=None):
@@ -152,4 +253,5 @@ def prune(body, query=None):
     return _json(200, {"kept": kept, "removed": removed})
 
 
-ROUTES = {"inpaint": inpaint, "subject": subject, "versions": versions, "prune": prune}
+ROUTES = {"inpaint": inpaint, "subject": subject, "versions": versions, "prune": prune, "segment": segment, "matte": matte, "segwarm": segwarm,
+          "models": models, "models_remove": models_remove}

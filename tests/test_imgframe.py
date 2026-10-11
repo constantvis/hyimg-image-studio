@@ -160,7 +160,7 @@ def test_frame_make_edit_save_undo_explode(hy, engine):
         assert fr.evaluate("() => __ed.root.filter(n => !n.main && !n.mmask).every(n => n.orig && n.locks.pixels)")   # originals are locked bases
         fr.wait_for_timeout(900)
         assert fr.evaluate("() => { const V = __ed.V, s = document.getElementById('side').getBoundingClientRect(); return V.x > 40 && V.x + __ed.W * V.s <= s.left + 1; }"), "the frame is not between the studio's panels"
-        assert page.evaluate("() => document.documentElement.classList.contains('ifedit') && document.querySelector('#cIfr').textContent.includes('Фрейм 1') && !!document.querySelector('#dock.plg-mode #ifActs')")
+        assert page.evaluate("() => document.documentElement.classList.contains('ifedit') && document.querySelector('#cStudio').textContent.includes('Фрейм 1') && !!document.querySelector('#dock.plg-mode #ifActs')")
         # the notes stand under the app's top row in every mode (Hyimg ui/toasts.js, --hy-row-under): the editor moves nothing
         assert page.evaluate("() => getComputedStyle(document.documentElement).getPropertyValue('--toast-top').trim()") == ""
         # the frame is drawn exactly where its card lies: the editor's view is the board's camera
@@ -492,7 +492,7 @@ def test_plugin_speaks_english_by_default(hy):
         page.dblclick(f".plg[data-id='{fid}']")
         editor(page)
         assert page.evaluate("() => document.querySelector('.ifed iframe').title") == "Image Studio"
-        assert "Frame 1" in page.locator("#cIfr").inner_text()
+        assert "Frame 1" in page.locator("#cStudio").inner_text()
         assert not errors, errors
         browser.close()
 

@@ -16,7 +16,11 @@
 // The dock never moves: each group is one button of a fixed size that only changes its icon, the zoom keeps its width, the strip and the
 // list hang above the dock outside it. The studio's own keys (V, G, M, L, W, B, J, I, H, X, D) go on working: the dock gives the
 // keyboard back to the studio after each click, and a key that changes the tool changes the dock (K.onTool).
-//   const D = studioDock({ t, win, K, zoom, acts })   D.node (into HY.dock)   D.close()   D.destroy()
+// The dock fits beside the library (studios audit S-01, 2026-10-11: 833 px, Select under the library and the dock over the Layers footer at
+// 1440): Actions is Hyimg's icon button, the percent 56 px, the switch only Board and Image. Where it still does not fit between the library
+// and the studio's right column with 16 px on each side (a 1280 window, a wide library), the library folds while the studio is open, as \
+// folds it, and comes back as it was when the studio closes (full(on): Hyimg's HY.full, as 3D Studio and Dev Studio fold it)
+//   const D = studioDock({ t, win, K, zoom, acts, full })   D.node (into HY.dock)   D.close()   D.destroy()
 const HOLD = 250, DRAG = 6;
 let css = null;
 const STYLE = `
@@ -40,7 +44,8 @@ const STYLE = `
     background: var(--c, var(--raise)) !important; box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 2.5px var(--muted) !important; }
   #dock .plgdock .ifcol .fg { left: 8px; top: 8px; z-index: 1; } #dock .plgdock .ifcol .bg { left: 14px; top: 14px; }
   #dock .plgdock .ifcol input { position: absolute; left: 8px; top: 8px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  #dock .plgdock #ifZoom { min-width: 72px; justify-content: center; font-variant-numeric: tabular-nums; }
+  /* the view's percent 56 px, as the board's and the other Studios' (Hyimg ui/dock.js .zlb); fixed, so the dock keeps its width as it changes */
+  #dock .plgdock #ifZoom { width: 56px; min-width: 56px; padding: 0 !important; justify-content: center; font-variant-numeric: tabular-nums; }
   /* the dock in the middle of the board's free part, between the library and the studio's right column (editor/dockwork.js) */
   html.ifedit #dock.plg-mode.ifmid { left: var(--ifdx) !important; transition: left .3s var(--hy-ease, cubic-bezier(.32,.72,0,1)); }
   /* the list over a group: the app's menu (ui/menu.js items), over the studio and its dock */
@@ -58,7 +63,7 @@ const STYLE = `
   .ifly button.hi > svg { opacity: 1; } .ifly button.hi.cur .ml::after { background: var(--hy-on-accent); }
   @media (prefers-reduced-motion: reduce) { .ifly.show { animation: none; } #dock .plgdock button.ifg { transition: none; } }`;
 
-export function studioDock({ t, win, K, zoom, acts }) {
+export function studioDock({ t, win, K, zoom, acts, full }) {
   if (!css) { css = document.createElement("style"); css.textContent = STYLE; document.head.appendChild(css); }
   const D = K.dock, G = D.groups(), esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const ic = (id, s) => (K.svg ? K.svg(id, s) : "");   // the studio's own names for its tools' icons (pick: the eyedropper)
@@ -203,9 +208,18 @@ export function studioDock({ t, win, K, zoom, acts }) {
   // the studio says where the free part of the board is (its coordinates are the stage's: its page covers the stage); the dock keeps 8 px
   // from the library when the part is narrower than the dock
   const dock = document.getElementById("dock");
-  function center(c, l) {
+  let folded = false, roomT = 0, fitT = 0;
+  function center(c, l, r) {
     if (!dock) return; const w = dock.offsetWidth || 0;
     dock.style.setProperty("--ifdx", Math.max(c, l + w / 2 + 8) + "px"); dock.classList.add("ifmid");
+    clearTimeout(roomT); roomT = setTimeout(() => room(l, r), dock.style.width ? 500 : 0);   // after the dock eased to its width (imgframe.js dockSwap)
+  }
+  function room(l, r) {
+    if (folded || !full || !dock || !dock.isConnected || l < 1 || !(r > l)) return;
+    if (dock.style.width) { roomT = setTimeout(() => room(l, r), 200); return; }
+    if (dock.offsetWidth + 32 > r - l) {   // the picture between the panels again once the library is away (its slide is about 0.4 s)
+      folded = true; full(true); fitT = setTimeout(() => { try { if (win.__ed && win.__ed.fitView) win.__ed.fitView(); } catch (e) {} }, 650);
+    }
   }
   D.link({ tool: id => sync(id), colors, key, center, outside: () => { if (F && !P) closeFly(); }, hist, step: dir => { hist(); if (!ST) return false; ST.done(dir); return true; } });
   return {
@@ -213,6 +227,7 @@ export function studioDock({ t, win, K, zoom, acts }) {
     destroy() {
       endPress(); closeFly(); D.link(null); fly.remove(); removeEventListener("keydown", onKey, true); document.removeEventListener("pointerdown", outside, true);
       if (dock) { dock.classList.remove("ifmid"); dock.style.removeProperty("--ifdx"); }
+      clearTimeout(roomT); clearTimeout(fitT); if (folded) { folded = false; full(false); }   // the library back as it was
     },
   };
 }

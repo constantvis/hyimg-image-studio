@@ -277,8 +277,8 @@ async function openEditor(id, wrap = null) {
     away: () => away(ses), done: () => awayDone(ses), failed: e => awayFailed(ses, e),   // leaving before the write (awaywork.js)
     toggleLib: () => { try { parent !== window && parent.postMessage({ type: "toggleCanvasFull" }, location.origin); } catch {} },
     zoom: t => { const z = $("#ifZoom"); if (z && z.textContent !== t) z.textContent = t; },
-    name: n => { const s = $("#cIfr .ifn"); if (s) s.textContent = n; },
-    rename: () => renameStep(),
+    name: () => HY.modeChanged(),   // the crumb's step is Hyimg's (ui/modes.js doc()): it reads the name again
+    rename: () => { const s = $("#cStudio"); if (s) s.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); },
     page: () => (typeof BOARD !== "undefined" ? BOARD : "main"),   // the board's page (canvas.html): a thread from the Annotations tab goes there
   };
   ED = Object.assign(ses, { win, host, card });
@@ -289,9 +289,9 @@ async function openEditor(id, wrap = null) {
   // the board around: dimmed except the frame, its chrome out, the crumb gains the frame, the dock becomes the editor's
   veil(it, true);
   document.documentElement.classList.add("ifedit");
-  crumbStep(it.name || t("Frame"));
-  dockSwap(editorDock());
+  dockSwap(editorDock()); HY.modeChanged();   // the crumb gains the frame's step (Hyimg ui/modes.js doc())
   try { EDF.f.contentWindow.focus(); } catch {}
+  replay();
 }
 // the editor starts its way out: the board comes back under it with the same moves (the frame's card already shows the saved render)
 function closing() {
@@ -299,7 +299,7 @@ function closing() {
   if (card) card.classList.remove("ifhide");
   if (ED.wrap) { unwrap(ED.id, ED.wrap); ED.wrap = null; }   // left without a Save: the picture, as it was
   veil(null, false); document.documentElement.classList.remove("ifedit");
-  crumbStep(null); dockSwap(null); if (DK) { DK.destroy(); DK = null; } if (ANN) ANN.close();
+  dockSwap(null); if (DK) { DK.destroy(); DK = null; } if (ANN) ANN.close();
   try { EDF.f.blur(); window.focus(); } catch {}   // the keys go to the board again (⌘Z right after a Save undoes it on the board)
 }
 function closed() {
@@ -344,7 +344,7 @@ function away(ses) {
   if (card) card.classList.remove("ifhide");
   if (ses.wrap) unwrap(id, ses.wrap);   // a picture not yet saved as a frame: the picture, until the frame is written
   veil(null, false); document.documentElement.classList.remove("ifedit");
-  crumbStep(null); dockSwap(null); if (DK) { DK.destroy(); DK = null; } if (ANN) ANN.close();
+  dockSwap(null); if (DK) { DK.destroy(); DK = null; } if (ANN) ANN.close();
   try { f.f.blur(); window.focus(); } catch {}
   ED = null; f.wrap.classList.add("away"); EDF = null; edReady = null;   // the next opening loads a page of its own
   HY.modeChanged(); leds(id);
@@ -390,7 +390,7 @@ function reopen(ses) {
   try { ses.win.hyEdK.away.resume(); } catch (e) { console.error(e); }
   if (ses.card) ses.card.classList.add("ifhide");
   veil(HY.board.items[id], true); document.documentElement.classList.add("ifedit");
-  crumbStep(nameOf(ses)); dockSwap(editorDock());
+  dockSwap(editorDock());
   try { EDF.f.contentWindow.focus(); } catch {}
   HY.modeChanged();
   return true;
@@ -424,6 +424,19 @@ function forward(e) {
   const ev = new w.KeyboardEvent("keydown", { key: e.key, code: e.code, keyCode: e.keyCode, metaKey: e.metaKey, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey,
     altKey: e.altKey, repeat: e.repeat, bubbles: true, cancelable: true });
   if (!(w.document.activeElement || w.document.body).dispatchEvent(ev)) e.preventDefault();
+}
+// Keys typed while the studio is on its way (a picture made into a frame, its page still loading; seconds on a slow Mac) are the studio's:
+// they wait here and go to it as soon as it is open, as Dev Studio and 3D Studio take theirs at once (studios audit S-02, 2026-10-11: B, M, I
+// and V right after entering did nothing, the Hint bar counted them used). Only plain keys (a tool's letter, [ ]); Esc still calls it off
+let EARLY = [];
+function ahead(e) {
+  if (e.metaKey || e.ctrlKey || e.repeat || !e.key || e.key.length !== 1 || e.key === " " || (window.hyTyping && (hyTyping(e) || hyTyping.ownKey(e)))) return false;
+  e.preventDefault(); if (EARLY.length < 8) EARLY.push({ key: e.key, code: e.code, keyCode: e.keyCode, shiftKey: e.shiftKey, altKey: e.altKey, at: Date.now() });
+  return true;
+}
+function replay() {
+  const keys = EARLY.filter(k => Date.now() - k.at < 20000); EARLY = [];
+  if (keys.length) whenOpen(() => keys.forEach(k => forward({ ...k, metaKey: false, ctrlKey: false, repeat: false, preventDefault() {} })));
 }
 // once the studio's page has its frame: fn(win), else never
 async function whenOpen(fn) { for (let i = 0; i < 200; i++) { if (ED && ED.win && ED.win.__ed && ED.win.__ed.ready) return fn(ED.win); if (!ED && !PENDING) return; await new Promise(r => setTimeout(r, 50)); } }
@@ -469,43 +482,23 @@ function veil(it, on) {
     Object.assign(r.style, { left: x + w + "px", top: y + "px", width: B + "px", height: h + "px" }); }
   v.classList.toggle("on", !!on);
 }
-// the frame's name joins the board's crumb (Home › project › board › page › frame); a click opens the editor's frame menu
-function crumbStep(name) {
-  const cr = $("#crumb"); if (!cr) return;
-  let st = $("#cIfr"), sp = $("#cIfrSep");
-  if (name == null) { if (st) { st.classList.remove("in"); sp.classList.remove("in"); setTimeout(() => { if (!ED) { st.remove(); sp.remove(); } }, 400); } return; }
-  if (!st) {
-    sp = document.createElement("span"); sp.className = "cs ifcs"; sp.id = "cIfrSep"; sp.innerHTML = window.HY_CHEV || "›";
-    st = document.createElement("button"); st.id = "cIfr"; st.innerHTML = `<i class="ifdot"></i><span class="ifn"></span>`;
-    st.addEventListener("click", e => { e.stopPropagation(); if (ED && ED.win) { const r = st.getBoundingClientRect(), w = EDF.wrap.getBoundingClientRect(); ED.win.__ed.frameMenu(r.left - w.left, r.bottom - w.top + 8); } });
-    st.addEventListener("dblclick", e => { e.stopPropagation(); renameStep(); });
-    cr.append(sp, st);
-  }
-  st.querySelector(".ifn").textContent = name;
-  requestAnimationFrame(() => { st.classList.add("in"); sp.classList.add("in"); });
-}
-function renameStep() {
-  const st = $("#cIfr"); if (!st || !ED) return; const s = st.querySelector(".ifn"), old = s.textContent;
-  const inp = document.createElement("input"); inp.value = old; inp.spellcheck = false; s.textContent = ""; s.appendChild(inp); inp.focus(); inp.select();
-  let fin = false; const done = ok => { if (fin) return; fin = true; const v = inp.value.trim(); s.textContent = ok && v ? v : old; if (ok && v && v !== old && ED) ED.win.__ed.setName(v); try { EDF.f.contentWindow.focus(); } catch {} };
-  // a name: ↵ and Tab apply, Esc puts it back (owner decision 2026-10-10, Hyimg's one helper, ui/typing.js); ⌘↵ applies and saves
-  if (window.hyTyping && hyTyping.keys) hyTyping.keys(inp, { esc: "cancel", enter: "line", apply: () => done(true), cancel: () => done(false), primary: () => ED && ED.win.__ed.saveFrame() });
-  else inp.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); });
-  inp.addEventListener("blur", () => done(true));
-}
 // the board's dock becomes the studio's: its tools, colours, zoom and Actions (studiodock.js; owner 2026-10-08, D3); its width eases from
 // one to the other. A studio page without the dock's side (editor/dockwork.js) gets the zoom and Actions alone
 function editorDock() {
   const n = document.createElement("span");
-  n.innerHTML = `<button class="wide" id="ifZoom" title="${t("Fit on screen · ⌘0")}">100%</button><span class="sep"></span><button class="wide" id="ifActs" title="${t("Actions · ⌘K")}">${IC.cmd}${t("Actions")}<kbd>⌘K</kbd></button>`;
-  const zoom = n.querySelector("#ifZoom"), acts = n.querySelector("#ifActs"), back = () => setTimeout(() => { try { ED && ED.win && ED.win.focus(); } catch {} }, 0);
+  // Actions: Hyimg's one dock button for it, the icon with its name and ⌘K in the tooltip (studios audit S-01, 2026-10-11: the dock fits)
+  n.innerHTML = `<button class="wide" id="ifZoom" title="${t("Fit on screen · ⌘0")}">100%</button><span class="sep"></span>`;
+  const zoom = n.querySelector("#ifZoom"), back = () => setTimeout(() => { try { ED && ED.win && ED.win.focus(); } catch {} }, 0);
+  const toggle = () => { if (ED && ED.win) { const e = ED.win.__ed; e.actsOpen() ? e.closeActs() : e.openActs(); } };
+  let acts = window.hyDock && window.hyDock.acts ? window.hyDock.acts(toggle) : null;
+  if (!acts) { acts = document.createElement("button"); acts.className = "wide"; acts.title = t("Actions · ⌘K"); acts.innerHTML = `${IC.cmd}${t("Actions")}<kbd>⌘K</kbd>`; acts.onclick = toggle; }
+  acts.id = "ifActs"; n.appendChild(acts);
   zoom.onclick = () => { if (ED && ED.win) { ED.win.__ed.fitView(); back(); } };
-  acts.onclick = () => { if (ED && ED.win) { const e = ED.win.__ed; e.actsOpen() ? e.closeActs() : e.openActs(); } };
   const K = ED && ED.win && ED.win.hyEdK;
   if (DK) { DK.destroy(); DK = null; }
   if (!K || !K.dock) return n;
   n.querySelector(".sep").remove();
-  DK = studioDock({ t, win: ED.win, K, zoom, acts });
+  DK = studioDock({ t, win: ED.win, K, zoom, acts, full: on => { if (HY.full) HY.full(on); } });
   return DK.node;
 }
 function dockSwap(node) {
@@ -591,12 +584,6 @@ export function register(hy) {
     :is(#info, #handles, #bhist, #bkeys, #bntf, #bset, #ntf, #hist, #sets, #keys, #pv, #jump, #hint, #ctx) { transition: opacity .25s cubic-bezier(.3,.8,.25,1); }
     html.ifedit :is(#info, #handles, #bhist, #bkeys, #bntf, #bset, #ntf, #hist, #sets, #keys, #pv, #jump, #hint, #ctx) { opacity: 0 !important; pointer-events: none !important; }
     html.ifedit #crumb, html.ifedit #dock { z-index: 1200 !important; }
-    html.ifedit #modetip { z-index: 1201 !important; }   /* the dock's mode switch tooltip (review/ui/modes.js) over the editor with the dock */
-    #crumb .ifcs, #cIfr { max-width: 0; opacity: 0; overflow: hidden; transition: max-width .4s cubic-bezier(.3,.8,.25,1), opacity .3s cubic-bezier(.3,.8,.25,1); }
-    #crumb .ifcs.in { max-width: 16px; opacity: 1; } #cIfr.in { max-width: 260px; opacity: 1; }
-    #cIfr { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--ink); }
-    #cIfr .ifdot { width: 9px; height: 9px; border-radius: 3px; background: var(--frame); flex: none; }
-    #cIfr input { font: inherit; color: inherit; background: transparent; border: 0; outline: none; width: 160px; }
     #dock .plgdock > * { animation: ifIn .35s cubic-bezier(.3,.8,.25,1) both; }
     @keyframes ifIn { from { opacity: 0; } }`;
   document.head.appendChild(st);
@@ -607,8 +594,10 @@ export function register(hy) {
     // ⌥⌘G one frame, ⌥⇧⌘G a frame each (⌘G stays the board's group); Enter opens a selected frame; while the editor covers the board
     // the board takes no keys
     onKey(e) {
-      if (ED) { if (ED.win && !(window.hyTyping && (hyTyping(e) || hyTyping.ownKey(e)))) forward(e); return true; }
-      if (PENDING && e.key === "Escape") { e.preventDefault(); PENDING = null; HY.modeChanged(); return true; }   // the studio was on its way
+      if (ED && ED.win) { if (!(window.hyTyping && (hyTyping(e) || hyTyping.ownKey(e)))) forward(e); return true; }
+      if ((ED || PENDING) && ahead(e)) return true;   // the studio is on its way: its keys wait for it
+      if (ED) return true;
+      if (PENDING && e.key === "Escape") { e.preventDefault(); EARLY = []; PENDING = null; HY.modeChanged(); return true; }   // the studio was on its way
       if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === "KeyG") {
         const ids = [...HY.sel].filter(id => HY.board.items[id] || HY.board.groups[id]); if (!ids.length) return false;
         e.preventDefault(); makeFrames(ids, e.shiftKey); return true;
@@ -661,6 +650,14 @@ export function register(hy) {
     title: t("Image Studio for the selected frame or image"), hint: t("Select one image or frame: Image Studio opens for it"),
     hintStudio: t("Open an image or a frame to use Image Studio"),   // the tooltip while another Studio is open (owner decision 2026-10-10)
     isOpen: () => !!ED || !!PENDING, card: () => (ED && ED.id) || PENDING || null,   // the card Hyimg lifts while the studio is open
+    // the shell (Hyimg ui/modes.js, round 20 «Одна оболочка», owner 2026-10-11: «беру»): the frame's step in the crumb, its name in the leave
+    // question; a click opens the frame's menu, a double click renames it
+    doc() {
+      if (ED) return { name: nameOf(ED), path: ED.path || ED.host.item.doc || "" };
+      const it = PENDING && HY.board.items[PENDING]; return it ? { name: it.name || it.path || t("Frame"), path: it.path || it.doc || "" } : null;
+    },
+    docMenu(r) { if (ED && ED.win) { const w = EDF.wrap.getBoundingClientRect(); ED.win.__ed.frameMenu(r.left - w.left, r.bottom - w.top + 8); } },
+    rename(v) { if (ED && ED.win) { ED.win.__ed.setName(v); try { EDF.f.contentWindow.focus(); } catch {} } },
     target: ids => { const it = ids.length === 1 && HY.board.items[ids[0]]; return it && (isFrame(it) || canGo(it)) ? ids[0] : null; },
     async enter(id) {
       if (SAVING.has(id)) return openSaving(id);   // its work on its way, or refused: that work

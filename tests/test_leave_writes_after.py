@@ -51,7 +51,7 @@ def test_a_picture_keeps_its_name(hy):
         assert json.loads((lib / page.evaluate("() => board.items.a1.doc")).read_text())["name"] == "a.png"
         page.wait_for_timeout(600); page.dblclick(".plg[data-id=a1]"); fr = studio(page)
         assert fr.evaluate("() => document.getElementById('cFrameName').textContent") == "a.png"
-        assert "a.png" in page.locator("#cIfr").inner_text()
+        assert page.locator("#cStudio").inner_text().strip() == "a"   # Hyimg's crumb step: the file's name without its extension (round 20)
         assert esc_left(page, fr) >= 0; closed(page)
         # Esc on a picture: written after the studio left, the frame called by the file too
         page.dblclick(".it[data-id=b1]"); fr = studio(page)

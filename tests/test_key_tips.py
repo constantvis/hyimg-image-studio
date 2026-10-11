@@ -25,8 +25,8 @@ def test_tooltips_always_name_their_key(hy):
         fr.evaluate("() => document.body.classList.add('nokeys')")
         el = fr.locator("[data-tip][data-key]:visible").first
         key = el.get_attribute("data-key")
-        el.hover(); fr.wait_for_selector("#tip.on .kc", timeout=3000)
-        got = fr.evaluate("() => [...document.querySelectorAll('#tip .kc')].map(k => [k.textContent, getComputedStyle(k).display !== 'none' && k.offsetWidth > 0])")
-        assert got == [[k, True] for k in key.split(" ")], (key, got)
+        el.hover(); fr.wait_for_selector("#hytip[shown] hy-kbd", timeout=3000)   # Hyimg's one tooltip (ui/hy/tooltip.js, round 20): a cap a key
+        got = fr.evaluate("() => [...document.querySelectorAll('#hytip hy-kbd')].map(k => [k.textContent, getComputedStyle(k).display !== 'none' && k.offsetWidth > 0])")
+        assert "".join(k for k, _ in got) == key.replace(" ", "") and all(v for _, v in got), (key, got)
         assert not errors, errors
         browser.close()

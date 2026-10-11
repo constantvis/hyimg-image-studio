@@ -76,6 +76,9 @@
     'select.subject': { args: '(macOS Vision, else the studio\'s simpler guess)', step: false, run: () => E().selectSubject() },
     'select.fromImage': { args: 'file (a mask picture of the library: white selects, black not, grey and transparency partly; stretched to the document), mode?',
       step: false, run: o => fromImage(o) },
+    'select.prompt': { args: 'text (a word: phone, hand, sky), pick? 0 the best | n | "all", mode?, box? {x, y, w, h} (only what lies over it); SAM 3', step: false,
+      run: o => seg().prompt(o) },
+    'select.click': { args: 'points [{x, y, label: 1 it | -1 not it}, …] (one object, as Smart Select\'s clicks), mode?; SAM 3', step: false, run: o => seg().click(o) },
     'select.all': { args: '', step: false, run: () => K.selectAll() },
     'select.none': { args: '', step: false, run: () => K.deselect() },
     'select.invert': { args: '', step: false, run: () => K.invertSel() },
@@ -124,6 +127,10 @@
     'mask.delete': { args: 'layer?', step: true, run: o => { const n = target(o); if (!n.mask) fail('the layer has no mask'); K.deleteMask(); } },
     'mask.edit': { args: 'on true|false, layer? (the brush, fill and erase go to the mask)', step: false,
       run: o => { const n = target(o); if (!n.mask) fail('the layer has no mask'); choose(n, o.on !== false); } },
+    'mask.refine': { args: 'method? birefnet (default: the picture\'s edges, its background away) | guided (no model): the selection\'s edge', step: false,
+      run: o => seg().refine(o) },
+    'matte.export': { args: 'as? layer (a cut-out layer, as ⌘J) | mask (the layer\'s mask) | png (the alpha and the cut-out, hy.py image run saves them), name?',
+      step: false, run: o => seg().exportMatte(o) },
     'mask.master.fromSelection': { args: '(the whole frame\'s mask: what is selected shows)', step: true, run: () => { if (!S.hasSel) fail('select an area first'); E().mmFromSel(); } },
     'mask.master.invert': { args: '', step: true, run: () => K.invertMask(K.mmNode()) },
     'mask.master.clear': { args: '', step: true, run: () => E().mmClear() },
@@ -133,6 +140,7 @@
     save: { args: '(a new version of the frame; the pictures and the older versions stay)', step: false, run: () => save() },
     info: { args: '', step: false, run: () => info() },
   };
+  const seg = () => K.seg || fail('SAM 3 and BiRefNet are not loaded in this studio (segwork.js)');
   function guard(n) { if (K.isPinned(n)) fail('a master layer: use mask.master.* or the Raw Editor'); }
   // a selection from a mask picture (owner 2026-10-10: «методы: выделение, маска, инверсия маски»): what an agent's segmentation or a 3D
   // silhouette made, loaded as the selection, combined by mode as a marquee is (index.html commitSelDraw: new clears, add, sub, int)

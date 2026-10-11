@@ -324,10 +324,7 @@ body{--rul:18px}   /* the rulers' room is kept whether they show or not (owner 2
 .db.zm{min-width:62px;color:var(--ink);font-variant-numeric:tabular-nums;padding:0 12px}
 .dsep{width:1px;height:18px;background:var(--line);flex:none}
 
-/* ---- tooltip, toast, dialog ---- */
-#tip{position:fixed;left:0;top:0;height:30px;border-radius:var(--r-plate);display:flex;align-items:center;gap:9px;padding:0 12px;white-space:nowrap;color:var(--ink);opacity:0;pointer-events:none;z-index:80;transition:opacity .16s var(--ease),transform .26s var(--ease)}
-#tip.k{padding-right:5px}
-#tip.on{opacity:1}
+/* ---- toast, dialog (the tooltip is Hyimg's one, ui/hy/tooltip.js <hy-tooltip>, round 20: this page's #tip was its model) ---- */
 #toast{left:50%;bottom:72px;transform:translate(-50%,10px);opacity:0;height:38px;border-radius:var(--r-plate);display:flex;align-items:center;padding:0 16px 0 12px;gap:9px;pointer-events:none;color:var(--ink);white-space:nowrap;z-index:70;
   transition:opacity .25s var(--ease),transform .35s var(--ease)}
 #toast.on{opacity:1;transform:translate(-50%,0)}
@@ -412,7 +409,6 @@ body{--rul:18px}   /* the rulers' room is kept whether they show or not (owner 2
 .pivg button:hover{background:var(--sub);transform:scale(1.25)}
 .pivg button.on{background:var(--ink);transform:scale(1.25)}
 #obar.tight .mbt{padding:0 9px}
-#tip.first{background:color-mix(in srgb,var(--sel) 30%,var(--panel));border-color:color-mix(in srgb,var(--sel) 60%,transparent)}
 #colorIn{position:fixed;left:-100px;top:0;width:1px;height:1px;opacity:0}
 #dropz{position:fixed;inset:10px;border-radius:var(--r-panel);border:1.5px dashed color-mix(in srgb,var(--sel) 70%,transparent);background:color-mix(in srgb,var(--sel) 6%,transparent);opacity:0;pointer-events:none;z-index:40;transition:opacity .2s var(--ease)}
 #dropz.on{opacity:1}
@@ -661,7 +657,6 @@ body.nt #crumb,body.nt #crumb *{transition:none!important}
 <div id="dock"></div>
 <div id="acts" class="plate" role="dialog"><div class="asr"><span class="asi"></span><input id="actsIn" spellcheck="false" autocomplete="off"><span class="kc">esc</span></div>
   <div id="actsTabs"></div><button id="actsBack"><svg data-ic="back" class="hy-chev" stroke-width="2.4"></svg><span></span></button><div id="actsList"></div></div>
-<div id="tip" class="plate"></div>
 <div id="toast" class="plate"></div>
 <div id="rcard" class="plate"><div class="rt"><span data-i="spark"></span><b id="rtitle"></b><button class="ib" id="rclose"></button></div><div class="bar"><i></i></div><div class="pv"></div></div>
 <div class="menu" id="menu"></div>
@@ -882,7 +877,7 @@ lookSync();
 // names this page has passed since before the registry, each to its registry name (one table, checked by scripts/validate.py)
 const K = window.hyEdK = { T: {} };   // the studio's modules (maskwork.js, selwork.js, menus.js) fill it, see the end of this script
 const ICON_NAME = {   // hy-icon-names
-  pick: 'eyedropper', fillca: 'contentFill', dots: 'more', hist: 'history', sliders: 'properties', removebg: 'removeBg', drop: 'colorToAlpha',
+  pick: 'eyedropper', smart: 'smartSelect', fillca: 'contentFill', dots: 'more', hist: 'history', sliders: 'properties', removebg: 'removeBg', drop: 'colorToAlpha',
   aL: 'alignLeft', aC: 'alignCenter', aR: 'alignRight', aT: 'alignTop', aM: 'alignMiddle', aB: 'alignBottom', guideN: 'guide', xform: 'transform',
   fx: 'layerStyle', adj: 'rawEditor', newl: 'newLayer', x: 'close', mergeall: 'flatten', raster: 'mergeNew', swap: 'swapColors', spark: 'generate',
   canvas: 'canvasSize', selall: 'selectAll', desel: 'deselect', invsel: 'invertSelection', sharp: 'sharpen', zin: 'zoomIn', zout: 'zoomOut',
@@ -1855,31 +1850,11 @@ function cropTransparent() {
 
 /* ================= UI helpers ================= */
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const tip = $('#tip'); let tipTimer = 0, tipLast = 0, tipFor = null;
-function showTip(el) {
-  const txt = el.dataset.tip, key = el.dataset.key, side = el.dataset.side || 'bottom';
-  tip.innerHTML = `<span>${txt}</span>` + (key ? key.split(' ').map(k => `<span class="kc">${k}</span>`).join('') : '');
-  tip.classList.toggle('k', !!key);
-  const r = el.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight; let x, y, ox = 0, oy = 0;
-  if (side === 'right') { x = r.right + 10; y = r.top + r.height / 2 - th / 2; ox = -4; }
-  else if (side === 'left') { x = r.left - 10 - tw; y = r.top + r.height / 2 - th / 2; ox = 4; }
-  else if (side === 'top') { x = r.left + r.width / 2 - tw / 2; y = r.top - 10 - th; oy = 4; }
-  else { x = r.left + r.width / 2 - tw / 2; y = r.bottom + 10; oy = -4; }
-  x = clamp(x, INSET + 8, innerWidth - tw - 8); y = clamp(y, 8, innerHeight - th - 8);
-  if (!tip.classList.contains('on')) { tip.style.transition = 'none'; tip.style.transform = `translate(${x + ox}px,${y + oy}px)`; tip.offsetWidth; tip.style.transition = ''; }
-  tip.style.transform = `translate(${x}px,${y}px)`; tip.classList.add('on'); tipFor = el;
-}
-function hideTip() { clearTimeout(tipTimer); tipTimer = 0; if (tip.classList.contains('on')) tipLast = performance.now(); tip.classList.remove('on'); tipFor = null; }
-document.addEventListener('pointerover', e => {
-  const el = e.target.closest && e.target.closest('[data-tip]');
-  if (!el || menuOpen() || actsOpen()) { if (tipFor || tipTimer) hideTip(); return; }
-  if (el === tipFor) return; clearTimeout(tipTimer);
-  const quick = tip.classList.contains('on') || performance.now() - tipLast < 400;
-  let first = false; if (el.dataset.first) { try { first = !localStorage.getItem('hy-ed-first-' + el.dataset.first); localStorage.setItem('hy-ed-first-' + el.dataset.first, '1'); } catch (er) { first = !S.firstSeen; } S.firstSeen = true; }
-  tip.classList.toggle('first', first);
-  tipTimer = setTimeout(() => showTip(el), quick || first ? 0 : 420);
-});
-document.addEventListener('pointerdown', hideTip, true);
+// The tooltip is Hyimg's one (ui/hy/tooltip.js, owner 2026-10-11 on round 20, question 11 A: «Одна своя подсказка», and this page's #tip
+// was its model): it reads the same data-tip, data-key («⌘ 0», «H Space»), data-side and data-first, with the board's 400 ms and its switch
+// (Settings › Interface › Tooltips). This page only says when its menus block it and where its free part begins (the library's INSET).
+window.hyTooltipConfig = { block: () => menuOpen() || actsOpen(), left: () => INSET };
+function hideTip() { if (window.hyTooltip) hyTooltip.hide(); }
 const toastEl = $('#toast'); let toastT = 0;
 function toast(text, icon = 'check') { if (K.note && K.note(text, icon)) return; toastEl.innerHTML = svg(icon, 16) + `<span>${text}</span>`; toastEl.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('on'), 1800); }
 
@@ -2774,13 +2749,13 @@ async function removeBackground() {
     const sc = Math.min(1, 1536 / Math.max(n.c.width, n.c.height)), sm = mk(n.c.width * sc, n.c.height * sc); sm.getContext('2d').drawImage(n.c, 0, 0, sm.width, sm.height);
     let url; try { url = sm.toDataURL('image/png'); } catch (e) { throw new Error(T.needsApp); }
     toast(T.removingBg, 'removebg');
-    const j = await api('/api/subject', { image: url }); let mc;
+    const j = (K.bgMatte && await K.bgMatte(url)) || await api('/api/subject', { image: url }); let mc;   // BiRefNet when installed (segwork.js)
     if (j && j.mask) mc = await maskFromURL(j.mask, n.c.width, n.c.height);
     else { const w = sm.width, h = sm.height, d = sm.getContext('2d').getImageData(0, 0, w, h).data, m = floodMask(d, w, h, borderSeeds(w, h).slice(0, 400), 30, true), t = maskToCanvas(m, w, h, true); mc = mk(n.c.width, n.c.height); const x = mc.getContext('2d'); const tt = mk(mc.width, mc.height); tt.getContext('2d').drawImage(t, 0, 0, mc.width, mc.height); blurInto(x, tt, 1); }
     mc._v = 1; const bgc = borderColor(n.c);
     edit(T.h.removeBg, () => { n.mask = { c: mc, density: 100, feather: 0, on: true, clean: true }; n.bgc = bgc; if (BG === '#ffffff') BG = '#232327'; });   // transparent stays
     S.editMask = false; refresh(); toast(j ? T.bgRemoved : T.bgRemovedLocal, 'removebg');
-    window.__lastRemoveBg = { how: j ? 'vision' : 'local', ms: j ? j.ms : null };
+    window.__lastRemoveBg = { how: j ? j.how || 'vision' : 'local', ms: j ? j.ms : null };
   } catch (e) { toast(T.failed + e.message, 'x'); }
   S.busy = false;
 }
@@ -2874,7 +2849,8 @@ async function inpaintCore(o) {
   lc._v = Date.now() % 1e9;
   const ms = Math.round(performance.now() - t0);
   console.info(`[inpaint] ${how === 'lama' ? 'LaMa ' + (srvMs ?? '?') + ' ms on the server' : 'local fill'}, ${ms} ms in all, crop ${cw}×${ch} → ${iw}×${ih}, layer ${rc.w}×${rc.h}`);
-  return { c: lc, rect: rc, how, ms, srvMs, crop: [cx0, cy0, cw, ch] };
+  // run: the layer's time and where it was made, kept in frame.json (owner 2026-10-11: the time of a generation is required)
+  return { c: lc, rect: rc, how, ms, srvMs, crop: [cx0, cy0, cw, ch], run: { seconds: ms / 1000, compute: (j && j.compute) || "local · Image Studio's own fill" } };
 }
 // a new layer made from what lies under the selected one goes above the selected layer's whole clipping stack, so the layers
 // clipped to it keep their base and do not tint the new pixels (spot healing over a clip base used to come out tinted)
@@ -2896,7 +2872,8 @@ async function runFill(job) {
     r = await inpaintCore({ m: keep, k: job.k, b: job.b, ref, local, feather: job.kind === 'patch' ? Math.max(2, (100 - S.patch.hard) / 100 * S.patch.size * .25) : 2, onLocal: () => { if (S.pend) S.pend.label = T.fillLocal; } });
   } catch (e) { S.pend = null; S.odirty = true; console.warn('[inpaint] error:', e.message); toast(T.fillFailed + e.message, 'x'); return; }
   const rc = r.rect;
-  edit(job.kind === 'patch' ? T.h.heal : T.h.caFill, () => { const n = pixNode((job.kind === 'patch' ? T.healN : T.fillN) + (S.patchSeq++), r.c, rc.x, rc.y, rc.w, rc.h); insertAbove(ref, [n]); S.ids = [n.id]; S.editMask = false; S.enter = n.id; });
+  edit(job.kind === 'patch' ? T.h.heal : T.h.caFill, () => { const n = pixNode((job.kind === 'patch' ? T.healN : T.fillN) + (S.patchSeq++), r.c, rc.x, rc.y, rc.w, rc.h); n.run = r.run;
+    insertAbove(ref, [n]); S.ids = [n.id]; S.editMask = false; S.enter = n.id; });
   S.pend = null; S.odirty = true; refresh();
   toast((r.how === 'lama' ? T.healed : T.fillLocal) + ` · ${r.how === 'lama' && r.srvMs != null ? r.srvMs : r.ms} ms`, 'patch');
   window.__lastFill = { how: r.how, ms: r.ms, crop: r.crop, layer: [rc.x, rc.y, rc.w, rc.h] };
@@ -2935,6 +2912,7 @@ async function genRun(id) {
       const d = [0, 6, 12][i], m = d ? dilate(g.src.m, d * g.src.k) : g.src.m, b = g.src.b;
       const r = await inpaintCore({ m, k: g.src.k, b: { x: b.x - d, y: b.y - d, w: b.w + 2 * d, h: b.h + 2 * d }, ref, rect: g.rect, feather: 2 });
       g.vars[i] = r.c; n = byId(id);
+      if (n) n.run = { seconds: Math.round(((i && n.run ? n.run.seconds : 0) + r.run.seconds) * 1000) / 1000, compute: r.run.compute };   // the three variants
       if (n && i === g.pick) { n.c = r.c; S.dirty = true; S.thumbs = true; }
       renderGen();
     }
@@ -3468,7 +3446,7 @@ async function nodeIn(d) {
   else return null;
   c._v = c._v || 1;
   const n = common(pixNode(d.name || T.picture, c, d.x, d.y, d.w, d.h), d);
-  n.angle = d.rot || 0; n.fx = !!(d.flip && d.flip[0]); n.fy = !!(d.flip && d.flip[1]); if (d.prompt) n.gen = { prompt: String(d.prompt), vars: [null, null, null], pick: 0, status: 'done' };
+  n.angle = d.rot || 0; n.fx = !!(d.flip && d.flip[0]); n.fy = !!(d.flip && d.flip[1]); if (d.prompt) n.gen = { prompt: String(d.prompt), vars: [null, null, null], pick: 0, status: 'done' }; if (d.run) n.run = d.run;
   if (d.kind === 'pic') { markOrig(n); n.src = { path: d.path, crop: d.crop || null, board: d.board || null, v0: c._v, missing }; }
   else { if (d.file) SAVED.set(n.id + '|layer', { c, v: c._v, file: d.file }); if (d.locked) markOrig(n); }
   n.mask = await maskIn(n.id, d.mask); return n;
@@ -3580,7 +3558,7 @@ function nodeOut(n) {
   if (n.type === 'adjust') return { ...b, kind: 'grade', params: n.params, mask: maskOut(n) };
   const geo = { x: n.x, y: n.y, w: n.w, h: n.h, rot: n.angle || 0, flip: [!!n.fx, !!n.fy], mask: maskOut(n) };
   if (keepsLink(n)) return { ...b, kind: 'pic', path: n.src.path, crop: n.src.crop, ...geo, locked: true, board: n.src.board };
-  return { ...b, kind: 'paint', file: fileOf(n.id + '|layer', `${DIR}/layers/${n.id}.png`), ...geo, locked: !!n.orig, ...(n.src ? { from: n.src.path } : {}), ...(n.gen && n.gen.prompt ? { prompt: n.gen.prompt } : {}) };
+  return { ...b, kind: 'paint', file: fileOf(n.id + '|layer', `${DIR}/layers/${n.id}.png`), ...geo, locked: !!n.orig, ...(n.src ? { from: n.src.path } : {}), ...(n.gen && n.gen.prompt ? { prompt: n.gen.prompt } : {}), ...(n.run ? { run: n.run } : {}) };
 }
 function docJSON(v) { return { version: 1, v: v ?? VERSION, name: FR.name, size: [W, H], background: BG, order: 'bottom-to-top', layers: root.filter(n => !isPinned(n)).map(nodeOut), mask: S.mmDoc || undefined, guides: S.gl.map(g => ({ o: g.o, pos: g.pos })),
   render: v ? `${DIR}/render.${v}.png` : undefined, saved: new Date().toISOString() }; }
@@ -3923,11 +3901,11 @@ Object.assign(K, { S, T, svg, esc, mk, copyC, bump, one, selNodes, topSel, byId,
   maskMenu, mmMenu, enterMaskMode, applyMaskMode, leaveMaskMode, toggleFilm, startFT, undo, redo, fillSelection, hitTest, toDoc, pixNode, docCanvas, insertAbove, lk, lockedByGroup,
   userLock, setLock, dockRect, clearInSel, linkSel, newLayer, setTool, dims: () => [W, H], view, get dpr() { return dpr; }, adjNode, deepCopy, HyCG, putFile, fileURL,
   TOOLS, loadImg, frameName: () => FR.name, renderView: () => { S.dirty = true; }, moveSet, boxOf, aabb, isDesc, mmCopy, isDirty, saveFrame, syncView, layout, closeActs, hideTip, ENT, host: () => HOST });
-Object.assign(K, { shapePath, wandAt, featherSel, selBounds, redo });   // what the agent's commands call besides (agentops.js)
+Object.assign(K, { shapePath, wandAt, featherSel, selBounds, redo, MB, commitSelDraw, maskFromURL, flatAt, Seg, otext, osel });   // agentops.js, segwork.js
 })();
 </script>
 <script src="basework.js"></script><script src="pickwork.js"></script><script src="dockwork.js"></script><script src="annwork.js"></script><script src="awaywork.js"></script>
-<script src="agentops.js"></script>   <!-- window.hyImage, the agent's commands: the same tools without the clicks -->
+<script src="agentops.js"></script><script src="segwork.js"></script>   <!-- window.hyImage, the agent's commands; SAM 3 and BiRefNet -->
 <script src="maskwork.js"></script><script src="clipwork.js"></script><script src="selwork.js"></script><script src="menus.js"></script>   <!-- after the page's script: they take window.hyEdK -->
 </body>
 </html>

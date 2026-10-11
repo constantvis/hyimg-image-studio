@@ -47,7 +47,9 @@ export function compact(p) {
 const gradeable = it => !!it && ((HY.isPic(it) && !VIDEO.test(it.path || "")) || it.type === "imgframe" || !!(HY.asPic && HY.asPic(it)));
 // the element a card's picture is in: a plugin card that is a picture tells it (HY.surface: a 3D card's still, its live three.js canvas
 // or Blender's frame, owner 2026-10-06), a frame card its render, a picture card its <img>; an <img> or a <canvas>, ready when it has pixels
-const surf = el => (HY.surface && HY.surface(el)) || el.querySelector(el.classList.contains("plg") ? "img.ifr" : "img");
+// HY is not here yet when a frame card is drawn while the plugin registers (imgframe.js registers its card before registerGrade): the card's
+// own picture then (studios audit S-20, 2026-10-11: a TypeError on every load of a board with a frame card)
+const surf = el => (HY && HY.surface && HY.surface(el)) || el.querySelector(el.classList.contains("plg") ? "img.ifr" : "img");
 const ready = s => !!s && (s.tagName === "CANVAS" ? s.width > 0 && s.height > 0 : s.complete && s.naturalWidth > 0);
 const keyOf = it => (it.grade ? JSON.stringify(it.grade) : "") + "|" + (it.crop || "");
 // a grade that changes the picture: not switched off as a whole (the panel's eye) and not with every changed section off. Before
